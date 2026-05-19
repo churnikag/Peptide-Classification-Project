@@ -7,6 +7,7 @@ Each peptide can belong to more than one activity class. The data in this reposi
 ## Data
 
 - `data/labels.sqlite` contains one table: `peptides`
+- Install sqlite plugin for pycharm to view this data
 - `data/pdb/` contains one PDB file per peptide ID
 - PDB filenames match the `ID` column, for example `satpdb10001.pdb`
 
