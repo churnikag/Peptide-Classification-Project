@@ -4,6 +4,7 @@ import pandas as pd
 import sqlite3
 import torch
 
+from sklearn.ensemble import RandomForestClassifier
 from transformers import AutoTokenizer, AutoModel
 from sklearn.model_selection import KFold
 from sklearn.metrics import f1_score
@@ -68,9 +69,13 @@ def embed(seq):
 
         cls = out[:, 0, :]
         mean = out.mean(dim=1)
+        maxpool = out.max(dim=1).values
 
-        emb = torch.cat([cls, mean], dim=1)
-        emb = emb.squeeze().cpu().numpy()
+        emb = torch.cat([cls, mean, maxpool], dim=1).squeeze().cpu().numpy()
+
+        norm = np.linalg.norm(emb)
+        if norm > 0:
+            emb = emb / norm
 
     CACHE[seq] = emb
 
@@ -116,10 +121,11 @@ def train(X_train, y_train):
 
     for i in range(len(CLASSES)):
 
-        m = LogisticRegression(
-            max_iter=2000,
+        m = RandomForestClassifier(
+            n_estimators=300,
             class_weight="balanced",
-            solver="liblinear"
+            random_state=42,
+            n_jobs=-1
         )
 
         m.fit(X_train, y_train[:, i])
@@ -190,7 +196,7 @@ def tune_thresholds(oof_probs, y):
         best_t = 0.5
         best_f1 = 0
 
-        for t in np.arange(0.05, 0.95, 0.02):
+        for t in np.arange(0.1, 0.7, 0.02):
 
             preds = (oof_probs[:, i] > t).astype(int)
 
