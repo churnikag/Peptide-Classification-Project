@@ -234,6 +234,32 @@ def main():
 
     oof_probs = run_kfold_training(X, y)
 
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import roc_curve, roc_auc_score
+
+    print("\n================ ROC / AUC ================")
+
+    plt.figure(figsize=(10, 8))
+
+    for i, c in enumerate(CLASSES):
+        auc = roc_auc_score(y[:, i], oof_probs[:, i])
+        fpr, tpr, _ = roc_curve(y[:, i], oof_probs[:, i])
+
+        print(f"{c} AUC: {auc:.4f}")
+
+        plt.plot(fpr, tpr, label=f"{c} (AUC={auc:.3f})")
+
+    plt.plot([0, 1], [0, 1], linestyle="--")
+
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("ROC Curves (OOF CV)")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    print("==========================================\n")
+
     thresholds = tune_thresholds(oof_probs, y)
 
     # ================= EVALUATE =================
