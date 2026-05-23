@@ -4,7 +4,9 @@ import pandas as pd
 import sqlite3
 import torch
 
-from sklearn.ensemble import RandomForestClassifier
+from datetime import datetime
+
+from xgboost import XGBClassifier
 from transformers import AutoTokenizer, AutoModel
 from sklearn.model_selection import KFold
 from sklearn.metrics import f1_score
@@ -117,34 +119,57 @@ def load_train():
 
 def train(X_train, y_train):
 
-    models = []
+    xgb_models = []
+    xgb_models_2 = []
 
     for i in range(len(CLASSES)):
 
-        m = RandomForestClassifier(
+        # Model 1 (XGB)
+        m1 = XGBClassifier(
             n_estimators=300,
-            class_weight="balanced",
-            random_state=42,
-            n_jobs=-1
+            max_depth=6,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            eval_metric="logloss",
+            random_state=42
         )
 
-        m.fit(X_train, y_train[:, i])
+        # Model 2 (acts like RF ensemble diversity)
+        m2 = XGBClassifier(
+            n_estimators=500,
+            max_depth=10,
+            learning_rate=0.03,
+            subsample=0.9,
+            colsample_bytree=0.9,
+            eval_metric="logloss",
+            random_state=7
+        )
 
-        models.append(m)
+        m1.fit(X_train, y_train[:, i])
+        m2.fit(X_train, y_train[:, i])
 
-    return models
+        xgb_models.append(m1)
+        xgb_models_2.append(m2)
+
+    return xgb_models, xgb_models_2
 
 # =========================
 # PREDICT
 # =========================
 
-def predict(models, X):
+def predict(models_a, models_b, X):
 
-    probs = np.zeros((len(X), len(CLASSES)))
+    probs_a = np.zeros((len(X), len(CLASSES)))
+    probs_b = np.zeros((len(X), len(CLASSES)))
 
-    for i, m in enumerate(models):
+    for i in range(len(CLASSES)):
 
-        probs[:, i] = m.predict_proba(X)[:, 1]
+        probs_a[:, i] = models_a[i].predict_proba(X)[:, 1]
+        probs_b[:, i] = models_b[i].predict_proba(X)[:, 1]
+
+    # === ENSEMBLE AVERAGE (this replaces RF + XGB) ===
+    probs = (probs_a + probs_b) / 2.0
 
     return probs
 
@@ -173,9 +198,9 @@ def run_kfold_training(X, y):
 
         y_train = y[train_idx]
 
-        models = train(X_train, y_train)
+        models_a, models_b = train(X_train, y_train)
 
-        val_probs = predict(models, X_val)
+        val_probs = predict(models_a, models_b, X_val)
 
         oof_probs[val_idx] = val_probs
 
@@ -290,7 +315,7 @@ def main():
 
     print("Training final models...")
 
-    final_models = train(X, y)
+    final_models_a, final_models_b = train(X, y)
 
     # ================= TEST =================
 
@@ -325,7 +350,7 @@ def main():
 
     # ================= PREDICT =================
 
-    test_probs = predict(final_models, X_test)
+    test_probs = predict(final_models_a, final_models_b, X_test)
 
     test_pred = np.zeros_like(test_probs)
 
@@ -341,14 +366,18 @@ def main():
 
     submission["ID"] = test_ids
 
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    submission_dir = f"submissions_{timestamp}"
+
     for i, c in enumerate(CLASSES):
 
         submission[c] = test_pred[:, i]
 
-    os.makedirs("submissions", exist_ok=True)
+
+    os.makedirs(submission_dir, exist_ok=True)
 
     submission.to_csv(
-        "submissions/submission.csv",
+        f"{submission_dir}/submission.csv",
         index=False
     )
 
