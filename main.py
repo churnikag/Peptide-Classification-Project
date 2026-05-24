@@ -11,9 +11,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, roc_curve, auc
 from Bio.PDB import PDBParser
 
-# =========================
+# ========================
 # CONFIG
-# =========================
+# ========================
 
 CLASSES = [
     "antibacterial", "anticancer", "antifungal", "antihypertensive",
